@@ -1,50 +1,54 @@
 #ifndef BLOCKCHAIN_H
 #define BLOCKCHAIN_H
-
-#include <bits/stdc++.h>
+#include <cstddef>
+#include <cstdint>
+#include <map>
+#include <string>
+#include <vector>
 #include "Block.h"
 #include "Transaction.h"
-using namespace std;
 
-class Blockchain{
-    // Data Members
-    private:
+class Blockchain {
+private:
+    // Stores blocks in the order they are added.
+    std::vector<Block> chain;
 
-    //1.Stores the ordered Blocks
-    vector <Block> chain;
+    // Stores transactions waiting to be mined.
+    std::vector<Transaction> pendingTransactions;
 
-    //2.Stores the Transactions that are pending for commitment
-    vector <Transaction> pendingTransactions;
-    
-    //3.Tracks account Balances 
-    map<string,int64_t> balances; //int64_t is used to avoid floating-point rounding errors
-    
-    //4.Designs the maximum Transactions per block 
-    size_t blockSize;
+    // Stores the confirmed balance of each address.
+    std::map<std::string, std::int64_t> balances;
 
-    //Member functions
-    public:
+    // Maximum number of transactions allowed in one block.
+    std::size_t blockSize;
 
-    //1.Constructor
+public:
+    // Creates a blockchain and its genesis block.
     Blockchain();
 
-    //2.Transaction management
+    // Adds a transaction if it passes validation.
     bool addTransaction(const Transaction& transaction);
-    bool isTransactionValid(const Transaction& transaction)const;
 
-    // 3. Block creation
+    // Checks whether a transaction is valid against the current ledger.
+    bool isTransactionValid(const Transaction& transaction) const;
+
+    // Mines pending transactions and updates confirmed balances.
     bool minePendingTransactions();
 
-    // 4. Chain validation
+    // Checks block hashes, links, indexes, and transaction integrity.
     bool isChainValid() const;
 
-    // 5. Read-only queries
+    // Returns the confirmed balance of an address.
     std::int64_t getBalance(const std::string& address) const;
+
+    // Returns the latest block.
     const Block& getLatestBlock() const;
-    const vector<Block>& getChain() const;
-    const vector<Transaction>& getPendingTransactions() const;
 
+    // Returns the complete chain without allowing modification.
+    const std::vector<Block>& getChain() const;
 
+    // Returns pending transactions without allowing modification.
+    const std::vector<Transaction>& getPendingTransactions() const;
 };
 
 #endif
