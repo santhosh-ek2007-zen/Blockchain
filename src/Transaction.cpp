@@ -10,8 +10,8 @@ Transaction::Transaction(const string &sender, const string &receiver, int64_t a
     timestamp=to_string(time(nullptr));
 
     //Random number generator for the transactionId
-    random_device rd;  //getting a random seed from the hardware
-    mt19937_64 gen(rd());  //64 bit Mersenne Twister engine
+    static random_device rd;  //getting a random seed from the hardware
+    static mt19937_64 gen(rd());  //64 bit Mersenne Twister engine
     uniform_int_distribution<uint64_t> dis;  //for even distribution of the generated numbers across the 64 bit range
 
     stringstream ss;
