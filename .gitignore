@@ -1,0 +1,9 @@
+# Windows binaries
+*.exe
+
+# Linux binaries
+*.out
+transaction_tests
+
+# CMake build directory
+build/
