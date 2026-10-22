@@ -1,6 +1,4 @@
 #include "../include/Block.h"
-// Uncomment the line below once HashUtil.h is added to the include/ folder:
-// #include "../include/HashUtil.h"
 
 #include <ctime>
 #include <iomanip>
