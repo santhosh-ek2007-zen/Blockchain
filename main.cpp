@@ -6,10 +6,12 @@
 #include "include/Blockchain.h"
 #include "include/Block.h"
 #include "include/Transaction.h"
+#include "include/TerminalUI.h"
 
-// Read a complete line and validate integer input.
-bool readInteger(const std::string& prompt, std::int64_t& value) {
+// Safely read a complete line and parse a 64-bit integer.
+bool readIntegerInput(const std::string& prompt, std::int64_t& value, bool& parseSuccess) {
     std::string line;
+    parseSuccess = false;
 
     std::cout << prompt;
 
@@ -21,27 +23,12 @@ bool readInteger(const std::string& prompt, std::int64_t& value) {
     std::int64_t enteredValue;
     char extra;
 
-    if (!(input >> enteredValue) || (input >> extra)) {
-        std::cout << "Invalid input. Please enter a whole number.\n";
-        return true;
+    if ((input >> enteredValue) && !(input >> extra)) {
+        value = enteredValue;
+        parseSuccess = true;
     }
 
-    value = enteredValue;
     return true;
-}
-
-// Display the available operations.
-void showMenu() {
-    std::cout << "\n========== C++ BLOCKCHAIN MVP ==========\n";
-    std::cout << "1. Create a transaction\n";
-    std::cout << "2. Mine pending transactions / create a block\n";
-    std::cout << "3. Display the blockchain\n";
-    std::cout << "4. Check account balance\n";
-    std::cout << "5. Validate the blockchain\n";
-    std::cout << "6. Demonstrate hash changes after tampering\n";
-    std::cout << "7. View pending transactions\n";
-    std::cout << "0. Exit\n";
-    std::cout << "========================================\n";
 }
 
 // Read transaction details and submit them to Blockchain.
@@ -49,154 +36,232 @@ void handleTransactionInput(Blockchain& blockchain) {
     std::string sender;
     std::string receiver;
     std::int64_t amount = 0;
+    bool parseSuccess = false;
 
-    std::cout << "\n--- Create Transaction ---\n";
+    TerminalUI::printSection("CREATE NEW TRANSACTION");
 
-    std::cout << "Enter sender account: ";
+    std::cout << "  Enter sender account   : ";
     if (!std::getline(std::cin, sender)) {
         return;
     }
 
-    std::cout << "Enter receiver account: ";
+    std::cout << "  Enter receiver account : ";
     if (!std::getline(std::cin, receiver)) {
         return;
     }
 
-    if (!readInteger("Enter amount: ", amount)) {
+    if (!readIntegerInput("  Enter transfer amount  : ", amount, parseSuccess)) {
+        return;
+    }
+
+    if (!parseSuccess) {
+        TerminalUI::displayTransactionResult(
+            false, sender, receiver, 0,
+            "Invalid amount format. Please enter a valid positive integer."
+        );
+        TerminalUI::promptContinue();
         return;
     }
 
     if (amount <= 0) {
-        std::cout << "Rejected: amount must be positive.\n";
+        TerminalUI::displayTransactionResult(
+            false, sender, receiver, amount,
+            "Transfer amount must be a positive integer greater than zero."
+        );
+        TerminalUI::promptContinue();
         return;
     }
+
+    if (sender.empty() || receiver.empty()) {
+        TerminalUI::displayTransactionResult(
+            false, sender, receiver, amount,
+            "Sender and receiver account names cannot be empty."
+        );
+        TerminalUI::promptContinue();
+        return;
+    }
+
+    if (sender == receiver) {
+        TerminalUI::displayTransactionResult(
+            false, sender, receiver, amount,
+            "Self-transfer not allowed: sender and receiver accounts must differ."
+        );
+        TerminalUI::promptContinue();
+        return;
+    }
+
+    // Inspect available balance for diagnostic explanation if rejected
+    std::int64_t senderBalance = blockchain.getBalance(sender);
+    std::int64_t pendingOutgoing = 0;
+    for (const Transaction& pending : blockchain.getPendingTransactions()) {
+        if (pending.getSender() == sender) {
+            pendingOutgoing += pending.getAmount();
+        }
+    }
+    std::int64_t availableBalance = senderBalance - pendingOutgoing;
 
     Transaction transaction(sender, receiver, amount);
 
     if (blockchain.addTransaction(transaction)) {
-        std::cout << "Transaction accepted into the pending pool.\n";
-        std::cout << "Sender: " << sender << '\n';
-        std::cout << "Receiver: " << receiver << '\n';
-        std::cout << "Amount: " << amount << '\n';
+        TerminalUI::displayTransactionResult(
+            true, sender, receiver, amount,
+            "Transaction accepted and added to the pending transaction pool."
+        );
     } else {
-        std::cout << "Transaction rejected.\n";
-        std::cout << "Check the account names, transfer rules, "
-                     "and available funds.\n";
+        std::string explanation;
+        if (amount > availableBalance) {
+            explanation = "Insufficient funds: sender '" + sender + "' has confirmed balance of " +
+                          std::to_string(senderBalance) + " and " + std::to_string(pendingOutgoing) +
+                          " pending outgoing (available: " + std::to_string(availableBalance) + " coins).";
+        } else if (blockchain.getPendingTransactions().size() >= 10) {
+            explanation = "Block capacity limit reached (10 txs). Mine pending transactions first.";
+        } else {
+            explanation = "Transaction rejected by blockchain validation rules.";
+        }
+
+        TerminalUI::displayTransactionResult(
+            false, sender, receiver, amount, explanation
+        );
     }
+
+    TerminalUI::promptContinue();
 }
 
 // Commit pending transactions into a new block.
 void handleBlockCreation(Blockchain& blockchain) {
-    std::cout << "\n--- Create Block ---\n";
+    TerminalUI::printSection("MINE PENDING TRANSACTIONS / CREATE BLOCK");
 
-    if (blockchain.getPendingTransactions().empty()) {
-        std::cout << "No pending transactions. Create a transaction first.\n";
+    const std::vector<Transaction>& pending = blockchain.getPendingTransactions();
+
+    if (pending.empty()) {
+        TerminalUI::displayBlockCreationResult(
+            false, 0, "", "", 0,
+            "No pending transactions in pool. Create and queue a transaction first."
+        );
+        TerminalUI::promptContinue();
         return;
     }
 
+    std::size_t pendingCount = pending.size();
+
     if (blockchain.minePendingTransactions()) {
-        std::cout << "Block created and committed successfully.\n";
-
         const Block& latestBlock = blockchain.getLatestBlock();
-
-        std::cout << "Block index: "
-                  << latestBlock.getIndex() << '\n';
-        std::cout << "Previous hash: "
-                  << latestBlock.getPreviousHash() << '\n';
-        std::cout << "Block hash: "
-                  << latestBlock.getHash() << '\n';
+        TerminalUI::displayBlockCreationResult(
+            true,
+            latestBlock.getIndex(),
+            latestBlock.getPreviousHash(),
+            latestBlock.getHash(),
+            latestBlock.getTransactions().size(),
+            "Block successfully created, linked to chain, and ledger balances updated (" +
+            std::to_string(pendingCount) + " transaction(s) committed)."
+        );
     } else {
-        std::cout << "Block creation failed. Check the blockchain rules.\n";
+        TerminalUI::displayBlockCreationResult(
+            false, 0, "", "", 0,
+            "Block creation failed. Verify pending transaction batch integrity and capacity."
+        );
     }
+
+    TerminalUI::promptContinue();
 }
 
 // Display all committed blocks.
 void handleChainDisplay(const Blockchain& blockchain) {
-    std::cout << "\n--- Committed Blockchain ---\n";
-
-    const std::vector<Block>& chain = blockchain.getChain();
-
-    if (chain.empty()) {
-        std::cout << "The chain is empty.\n";
-        return;
-    }
-
-    for (const Block& block : chain) {
-        std::cout << block.toString() << '\n';
-        std::cout << "----------------------------------------\n";
-    }
-
-    std::cout << "Total blocks: " << chain.size() << '\n';
+    TerminalUI::displayBlockchain(blockchain.getChain());
+    TerminalUI::promptContinue();
 }
 
 // Query an account balance.
 void handleBalanceQuery(const Blockchain& blockchain) {
     std::string account;
 
-    std::cout << "\n--- Account Balance ---\n";
-    std::cout << "Enter account name: ";
+    TerminalUI::printSection("CHECK ACCOUNT BALANCE");
+    std::cout << "  Enter account name: ";
 
     if (!std::getline(std::cin, account)) {
         return;
     }
 
-    std::cout << "Balance of " << account << ": "
-              << blockchain.getBalance(account) << '\n';
+    if (account.empty()) {
+        TerminalUI::displayWarningMessage("Account name cannot be empty.");
+        TerminalUI::promptContinue();
+        return;
+    }
+
+    std::int64_t confirmedBalance = blockchain.getBalance(account);
+    std::int64_t pendingOutgoing = 0;
+    std::int64_t pendingIncoming = 0;
+
+    for (const Transaction& tx : blockchain.getPendingTransactions()) {
+        if (tx.getSender() == account) {
+            pendingOutgoing += tx.getAmount();
+        }
+        if (tx.getReceiver() == account) {
+            pendingIncoming += tx.getAmount();
+        }
+    }
+
+    TerminalUI::displayBalance(account, confirmedBalance, pendingOutgoing, pendingIncoming);
+    TerminalUI::promptContinue();
 }
 
 // Validate block hashes and previous-hash links.
 void handleValidation(const Blockchain& blockchain) {
-    std::cout << "\n--- Blockchain Validation ---\n";
+    const std::vector<Block>& chain = blockchain.getChain();
+    bool overallValid = blockchain.isChainValid();
 
-    if (blockchain.isChainValid()) {
-        std::cout << "Chain is valid.\n";
-        std::cout << "Stored block hashes and chain links passed validation.\n";
-    } else {
-        std::cout << "WARNING: Chain validation failed.\n";
-        std::cout << "A stored hash or block link may be inconsistent.\n";
+    bool genesisValid = !chain.empty() && chain[0].getIndex() == 0 && chain[0].getPreviousHash() == "0";
+    bool indexesValid = true;
+    bool hashesValid = true;
+    bool linksValid = true;
+
+    for (std::size_t i = 0; i < chain.size(); ++i) {
+        if (chain[i].getHash() != chain[i].calculateHash()) {
+            hashesValid = false;
+        }
+        if (i > 0) {
+            if (chain[i].getPreviousHash() != chain[i - 1].getHash()) {
+                linksValid = false;
+            }
+            if (chain[i].getIndex() != chain[i - 1].getIndex() + 1) {
+                indexesValid = false;
+            }
+        }
     }
+
+    TerminalUI::displayValidationResult(
+        overallValid, chain.size(), genesisValid, hashesValid, linksValid, indexesValid
+    );
+    TerminalUI::promptContinue();
 }
 
 // Display transactions waiting to be committed.
 void handlePendingTransactions(const Blockchain& blockchain) {
-    std::cout << "\n--- Pending Transactions ---\n";
-
-    const std::vector<Transaction>& pending =
-        blockchain.getPendingTransactions();
-
-    if (pending.empty()) {
-        std::cout << "No pending transactions.\n";
-        return;
-    }
-
-    for (std::size_t i = 0; i < pending.size(); ++i) {
-        std::cout << "Transaction " << i + 1 << '\n';
-        std::cout << "  Sender: "
-                  << pending[i].getSender() << '\n';
-        std::cout << "  Receiver: "
-                  << pending[i].getReceiver() << '\n';
-        std::cout << "  Amount: "
-                  << pending[i].getAmount() << '\n';
-    }
-
-    std::cout << "Pending count: " << pending.size() << '\n';
+    TerminalUI::displayPendingTransactions(blockchain.getPendingTransactions());
+    TerminalUI::promptContinue();
 }
 
 // Demonstrate how changing a block copy changes its hash.
 // The committed blockchain remains untouched.
 void handleTamperingDemo(const Blockchain& blockchain) {
-    std::cout << "\n--- Controlled Tampering Demonstration ---\n";
-
     const std::vector<Block>& chain = blockchain.getChain();
 
     if (chain.size() < 2) {
-        std::cout << "Mine at least one block after the genesis block first.\n";
+        TerminalUI::printSection("CONTROLLED TAMPERING DEMONSTRATION");
+        TerminalUI::displayWarningMessage(
+            "Requires at least one committed block after the genesis block (Block #1)."
+        );
+        TerminalUI::displayInfoMessage(
+            "Please create a transaction [Option 1] and mine a block [Option 2] first."
+        );
+        TerminalUI::promptContinue();
         return;
     }
 
     const Block& originalBlock = chain[1];
     const std::string originalStoredHash = originalBlock.getHash();
 
+    // Create an isolated local copy of Block #1
     Block alteredBlock = originalBlock;
 
     Transaction fakeTransaction(
@@ -205,48 +270,46 @@ void handleTamperingDemo(const Blockchain& blockchain) {
         1
     );
 
+    // Tamper with the copy by injecting the unauthorized transaction
     alteredBlock.addTransaction(fakeTransaction);
-
     const std::string alteredHash = alteredBlock.calculateHash();
 
-    std::cout << "Original block index: "
-              << originalBlock.getIndex() << '\n';
-    std::cout << "Original stored hash: "
-              << originalStoredHash << '\n';
-    std::cout << "Hash after changing the copy: "
-              << alteredHash << '\n';
+    // Check live chain validity
+    bool chainStillValid = blockchain.isChainValid();
 
-    if (originalStoredHash != alteredHash) {
-        std::cout << "Result: changing the block contents changed its hash.\n";
-        std::cout << "The original committed chain remains untouched.\n";
-    } else {
-        std::cout << "Unexpected result: hashes match. Inspect Block hashing.\n";
-    }
-
-    std::cout << "\nValidating the actual chain again...\n";
-
-    if (blockchain.isChainValid()) {
-        std::cout << "The original chain remains valid.\n";
-    } else {
-        std::cout << "The original chain is invalid.\n";
-    }
+    TerminalUI::displayTamperingDemo(
+        originalBlock, originalStoredHash,
+        alteredBlock, alteredHash,
+        chainStillValid
+    );
+    TerminalUI::promptContinue();
 }
 
 int main() {
-    Blockchain blockchain;
+    TerminalUI::initialize();
 
-    std::cout << "Welcome to the C++ Transaction-Based Blockchain!\n";
-    std::cout << "The blockchain has been initialized.\n";
+    Blockchain blockchain;
 
     bool running = true;
 
     while (running) {
-        showMenu();
+        TerminalUI::printDashboard(
+            blockchain.getChain().size(),
+            blockchain.getPendingTransactions().size(),
+            blockchain.isChainValid()
+        );
 
         std::int64_t choice = -1;
+        bool parseSuccess = false;
 
-        if (!readInteger("Choose an option: ", choice)) {
+        if (!readIntegerInput("\n  Select operation [0-7]: ", choice, parseSuccess)) {
             break;
+        }
+
+        if (!parseSuccess) {
+            TerminalUI::displayErrorMessage("Invalid input format. Please enter a whole number from 0 to 7.");
+            TerminalUI::promptContinue();
+            continue;
         }
 
         switch (choice) {
@@ -280,11 +343,12 @@ int main() {
 
             case 0:
                 running = false;
-                std::cout << "Exiting the blockchain application.\n";
+                TerminalUI::displayExitBanner();
                 break;
 
             default:
-                std::cout << "Invalid menu option. Choose 0 to 7.\n";
+                TerminalUI::displayErrorMessage("Invalid menu selection. Please choose an option between 0 and 7.");
+                TerminalUI::promptContinue();
                 break;
         }
     }
