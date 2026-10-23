@@ -1,0 +1,309 @@
+# Blockchain Class Documentation
+
+This document explains the purpose of each data member and member function in the `Blockchain` class.
+
+## Overview
+
+The `Blockchain` class manages the block history, pending transactions, account balances, and the maximum number of transactions allowed in a block.
+
+Its main responsibilities are to:
+
+- Initialize the blockchain with a genesis block.
+- Validate and queue transactions.
+- Create blocks from pending transactions.
+- Maintain account balances.
+- Provide read-only access to blockchain data.
+- Check the integrity of the block chain.
+
+## Data Members
+
+The following members are private, so they are managed by the `Blockchain` class rather than modified directly by external code.
+
+### 1. `chain`
+
+```cpp
+std::vector<Block> chain;
+```
+
+**Purpose:** Stores the ordered list of blocks that have been added to the blockchain.
+
+- The first block is the **genesis block**.
+- New blocks are appended to the end of the vector.
+- Each block stores transactions and information linking it to the preceding block.
+
+**Why it is needed:** It is the committed history of the blockchain.
+
+### 2. `pendingTransactions`
+
+```cpp
+std::vector<Transaction> pendingTransactions;
+```
+
+**Purpose:** Stores accepted transactions that have not yet been included in a block.
+
+- `addTransaction()` validates a transaction before adding it.
+- `minePendingTransactions()` uses the pending transactions to create a new block.
+- After successful mining, the pending list is cleared.
+
+**Why it is needed:** It separates proposed transactions from transactions that have already been committed to the chain.
+
+### 3. `balances`
+
+```cpp
+std::map<std::string, std::int64_t> balances;
+```
+
+**Purpose:** Maps each account address to its current recorded balance.
+
+- The key (`std::string`) is the account address.
+- The value (`std::int64_t`) is the account balance.
+- `getBalance()` uses this map to retrieve a balance.
+- Successful mining updates the balances according to the committed transactions.
+
+**Why it is needed:** It makes balance lookups efficient without replaying the entire chain for every query.
+
+**Important design note:** The balance map is derived state. A stronger `isChainValid()` implementation should replay committed transactions and reconstruct the ledger to verify that the map is consistent with the chain.
+
+### 4. `blockSize`
+
+```cpp
+std::size_t blockSize;
+```
+
+**Purpose:** Defines the maximum number of transactions permitted in a block.
+
+In the current implementation, the constructor initializes it to `10`.
+
+**Why it is needed:** It limits the number of transactions accepted into the pending pool and included in a block.
+
+---
+
+## Member Functions
+
+### 1. `Blockchain()`
+
+```cpp
+Blockchain();
+```
+
+**Purpose:** Initializes a new blockchain.
+
+The constructor:
+
+1. Sets the block capacity (`blockSize`) to `10`.
+2. Creates the genesis block with index `0`.
+3. Gives the genesis block an empty transaction list.
+4. Sets the genesis block's previous hash to `"0"`.
+5. Adds the genesis block to `chain`.
+
+**Why it is needed:** Every blockchain needs a starting block from which later blocks can be linked.
+
+**Current limitation:** Creating a genesis block does not automatically give any account an initial balance. Since `balances` starts empty, a controlled initial-funding mechanism is needed if the application should support transfers from funded accounts.
+
+### 2. `isTransactionValid()`
+
+```cpp
+bool isTransactionValid(const Transaction& transaction) const;
+```
+
+**Purpose:** Checks whether a transaction satisfies the current transaction rules.
+
+The function rejects transactions when, for example:
+
+- The sender or receiver address is empty.
+- The sender and receiver are the same.
+- The amount is not positive.
+- The sender does not have enough available funds.
+- Pending outgoing transactions would cause the sender to overspend.
+- Updating the receiver's balance could overflow the supported integer range.
+
+It returns `true` when the transaction passes the checks and `false` otherwise.
+
+**Why it is needed:** It prevents invalid transactions from entering the pending transaction pool.
+
+The `const` qualifier means the function does not modify the `Blockchain` object's members while validating the transaction.
+
+### 3. `addTransaction()`
+
+```cpp
+bool addTransaction(const Transaction& transaction);
+```
+
+**Purpose:** Validates and adds a transaction to `pendingTransactions`.
+
+The function:
+
+1. Checks that the configured block capacity is usable.
+2. Checks that the pending pool has room.
+3. Calls `isTransactionValid()`.
+4. Adds the transaction to the pending list if it passes validation.
+
+It returns `true` if the transaction is accepted into the pending list and `false` if it is rejected.
+
+**Why it is needed:** It separates transaction submission from block creation. Accepted transactions can wait until the next mining operation.
+
+### 4. `minePendingTransactions()`
+
+```cpp
+bool minePendingTransactions();
+```
+
+**Purpose:** Creates a new block from pending transactions and updates the account balances.
+
+The function:
+
+1. Checks that the chain and pending list are in a usable state.
+2. Rejects an empty pending list or a list that exceeds the configured capacity.
+3. Copies `balances` into a temporary map.
+4. Validates and applies the pending transfers to that temporary map.
+5. Creates a new block containing the pending transactions.
+6. Links the new block to the latest block using the latest block's hash.
+7. Adds the new block to `chain`.
+8. Commits the temporary balances to `balances`.
+9. Clears `pendingTransactions` after success.
+
+It returns `true` when the block is added successfully and `false` when the operation is rejected.
+
+**Why it uses a temporary balance map:** If validation fails partway through processing, the real balance map remains unchanged. This helps avoid partially applying a batch of transactions.
+
+**Important consistency note:** Transaction acceptance and mining should follow the same spending policy. In the current design, pending incoming funds are not counted as spendable when `addTransaction()` validates a new transaction, so mining should enforce that same rule.
+
+**Scope note:** This project’s mining operation is simplified block creation; it does not perform proof-of-work.
+
+### 5. `isChainValid()`
+
+```cpp
+bool isChainValid() const;
+```
+
+**Purpose:** Checks the structural and hash consistency of the blockchain.
+
+The current implementation checks that:
+
+- The chain is not empty.
+- The genesis block has index `0`.
+- The genesis block's previous hash is `"0"`.
+- Each block's stored hash matches its calculated hash.
+- Each non-genesis block references the preceding block's hash.
+- Block indexes increase consecutively.
+
+It returns `true` if these checks pass and `false` otherwise.
+
+**Why it is needed:** It can detect many accidental or unauthorized changes to block data and broken links between blocks.
+
+**Current limitation:** The current implementation does not replay all transactions to verify that they obey the balance rules, and it does not compare a reconstructed ledger with `balances`. Hash-link checks alone do not prove that the transaction history is financially valid.
+
+### 6. `getBalance()`
+
+```cpp
+std::int64_t getBalance(const std::string& address) const;
+```
+
+**Purpose:** Returns the recorded balance for the specified account.
+
+- If the address exists in `balances`, it returns the associated balance.
+- If the address is not present, the current implementation returns `0`.
+
+**Why it is needed:** It provides a simple way for other parts of the application to query an account's confirmed balance.
+
+It does not subtract pending outgoing transactions; it returns the balance recorded in the current ledger.
+
+### 7. `getLatestBlock()`
+
+```cpp
+const Block& getLatestBlock() const;
+```
+
+**Purpose:** Returns a read-only reference to the last block in `chain`.
+
+**Why it is needed:** When creating a new block, the implementation needs the latest block's index and hash to assign the next index and link the new block to its predecessor.
+
+The function returns a `const` reference to avoid copying the block and to prevent callers from modifying it through the returned reference.
+
+**Precondition:** `chain` must not be empty. The constructor establishes this condition for a normally initialized object.
+
+### 8. `getChain()`
+
+```cpp
+const std::vector<Block>& getChain() const;
+```
+
+**Purpose:** Provides read-only access to the complete block history.
+
+**Why it is needed:** Other parts of the application can inspect blocks, display the chain, or write tests without receiving direct permission to modify the underlying vector through this reference.
+
+### 9. `getPendingTransactions()`
+
+```cpp
+const std::vector<Transaction>& getPendingTransactions() const;
+```
+
+**Purpose:** Provides read-only access to the transactions waiting to be mined.
+
+**Why it is needed:** The application can display or inspect pending transactions without directly changing the pending list.
+
+---
+
+## How the Members Work Together
+
+```text
+                 addTransaction()
+                        |
+                        v
+              isTransactionValid()
+                        |
+              If valid and capacity
+                 is available
+                        |
+                        v
+              pendingTransactions
+                        |
+                        v
+             minePendingTransactions()
+                        |
+              Validate and apply
+             to a temporary balance map
+                        |
+              +---------+---------+
+              |                   |
+           Failure              Success
+              |                   |
+       Keep current state     Create new Block
+                              and append to chain
+                                     |
+                                     v
+                              Commit balances
+                                     |
+                                     v
+                         Clear pending transactions
+```
+
+The read-only functions (`getBalance()`, `getLatestBlock()`, `getChain()`, and `getPendingTransactions()`) let other code inspect the current state. `isChainValid()` checks the stored chain's integrity.
+
+## Design Summary
+
+| Member | Responsibility |
+|---|---|
+| `chain` | Stores committed blocks in order |
+| `pendingTransactions` | Stores accepted transactions waiting for a block |
+| `balances` | Tracks recorded account balances |
+| `blockSize` | Sets the transaction capacity for a block |
+
+| Function | Responsibility |
+|---|---|
+| `Blockchain()` | Initializes the chain and genesis block |
+| `isTransactionValid()` | Checks transaction rules and available funds |
+| `addTransaction()` | Validates and queues a transaction |
+| `minePendingTransactions()` | Creates a block and commits balance changes |
+| `isChainValid()` | Checks block hashes, links, and indexes |
+| `getBalance()` | Retrieves an account's recorded balance |
+| `getLatestBlock()` | Retrieves the latest block |
+| `getChain()` | Exposes the block history read-only |
+| `getPendingTransactions()` | Exposes the pending list read-only |
+
+## Important Limitations of This Learning Implementation
+
+- There is no initial-funding mechanism in the described constructor.
+- Mining does not implement proof-of-work.
+- The current chain validator checks hashes and links but does not fully validate transaction history or reconstruct balances.
+- Hashes alone do not prove who authorized a transaction; a real cryptocurrency-style system would need authentication mechanisms such as digital signatures.
