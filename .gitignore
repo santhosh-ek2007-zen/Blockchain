@@ -5,5 +5,8 @@
 *.out
 transaction_tests
 
+#configuration settings in vscode
+.vscode
+
 # CMake build directory
 build/
