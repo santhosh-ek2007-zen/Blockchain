@@ -129,7 +129,7 @@ ls /mingw64/include/openssl/sha.h
 ### Step 1: Clone the repository
 
 ```bash
-git clone <https://github.com/santhosh-ek2007-zen/Blockchain>
+git clone https://github.com/santhosh-ek2007-zen/Blockchain
 cd Blockchain
 ```
 
