@@ -49,6 +49,9 @@ public:
 
     // Returns pending transactions without allowing modification.
     const std::vector<Transaction>& getPendingTransactions() const;
+
+    // Set the initial balances
+    void initializeAccount(const std::string& account, long long amount);
 };
 
 #endif

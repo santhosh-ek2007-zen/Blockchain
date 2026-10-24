@@ -7,6 +7,6 @@ transaction_tests
 
 #configuration settings in vscode
 .vscode
-
+.blockchain.exe
 # CMake build directory
 build/

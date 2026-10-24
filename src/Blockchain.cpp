@@ -361,3 +361,11 @@ const std::vector<Block>& Blockchain::getChain() const {
 const std::vector<Transaction>& Blockchain::getPendingTransactions() const {
     return pendingTransactions;
 }
+
+void Blockchain::initializeAccount(const std::string& account, long long amount) {
+    if (account.empty() || amount < 0) {
+        return;
+    }
+    // Create the account only if it does not already exist.
+    balances.emplace(account, amount);
+}

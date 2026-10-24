@@ -90,6 +90,10 @@ void handleTransactionInput(Blockchain& blockchain) {
         return;
     }
 
+    // Give new accounts an initial balance of 100 coins.
+    blockchain.initializeAccount(sender, 100);
+    blockchain.initializeAccount(receiver, 100);
+
     // Inspect available balance for diagnostic explanation if rejected
     std::int64_t senderBalance = blockchain.getBalance(sender);
     std::int64_t pendingOutgoing = 0;
@@ -107,7 +111,8 @@ void handleTransactionInput(Blockchain& blockchain) {
             true, sender, receiver, amount,
             "Transaction accepted and added to the pending transaction pool."
         );
-    } else {
+    } 
+    else {
         std::string explanation;
         if (amount > availableBalance) {
             explanation = "Insufficient funds: sender '" + sender + "' has confirmed balance of " +
@@ -172,7 +177,7 @@ void handleChainDisplay(const Blockchain& blockchain) {
 }
 
 // Query an account balance.
-void handleBalanceQuery(const Blockchain& blockchain) {
+void handleBalanceQuery(Blockchain& blockchain) {
     std::string account;
 
     TerminalUI::printSection("CHECK ACCOUNT BALANCE");
@@ -187,7 +192,7 @@ void handleBalanceQuery(const Blockchain& blockchain) {
         TerminalUI::promptContinue();
         return;
     }
-
+    blockchain.initializeAccount(account, 100);
     std::int64_t confirmedBalance = blockchain.getBalance(account);
     std::int64_t pendingOutgoing = 0;
     std::int64_t pendingIncoming = 0;
