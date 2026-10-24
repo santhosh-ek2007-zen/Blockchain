@@ -178,8 +178,6 @@ On Windows PowerShell:
 - Improve transaction validation and ledger consistency.
 - Develop a graphical user interface.
 
-These limitations and roadmap items should be updated as the project evolves.
-
 ## 9. Project Status
 
 This project is under development as an educational implementation of blockchain fundamentals using C++ and Object-Oriented Programming.
