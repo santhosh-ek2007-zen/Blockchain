@@ -7,7 +7,7 @@ using namespace std;
 Transaction::Transaction(const string &sender, const string &receiver, int64_t amount): sender(sender), receiver(receiver), amount(amount)
 {
     //Converting Unix time to string
-    timestamp=to_string(time(nullptr));
+    timestamp=static_cast<int64_t>(time(nullptr));
 
     //Random number generator for the transactionId
     static random_device rd;  //getting a random seed from the hardware
@@ -57,7 +57,7 @@ int64_t Transaction::getAmount() const
     return amount;
 }
 
-string Transaction::getTimestamp() const 
+int64_t Transaction::getTimestamp() const 
 {
     return timestamp;
 }

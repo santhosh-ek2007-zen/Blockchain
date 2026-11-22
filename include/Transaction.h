@@ -10,7 +10,7 @@ class Transaction
     std::string sender; //account sending the funds
     std::string receiver; //account getting the funds
     std::int64_t amount; //transfer value
-    std::string timestamp; //time when the transfer was created
+    std::int64_t timestamp; //time when the transfer was created
     std::string transactionId; //unique identifier for this specific transaction
 
     public:
@@ -25,7 +25,7 @@ class Transaction
     std::string getSender() const;
     std::string getReceiver() const;
     std::int64_t getAmount() const;
-    std::string getTimestamp() const;
+    std::int64_t getTimestamp() const;
     std::string getTransactionId() const;
 
     //formats the transaction into a consistent string representation so it can be displayed on the console or hashed later

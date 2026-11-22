@@ -43,6 +43,10 @@ int main()
     Transaction t8("Eve", "Frank", 50);
     assert(t7.getTransactionId() != t8.getTransactionId());
 
+    //Test 7: Timestamp format validation
+    Transaction t9("Grace", "Heidi", 75);
+    assert(t9.getTimestamp()>0);
+
     cout << "All Transaction tests passed successfully!" << endl;
     return 0;
 }
