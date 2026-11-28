@@ -13,13 +13,13 @@ private:
     std::int64_t timestamp;                  // Block creation time (Integer time value)
     std::vector<Transaction> transactions;   // Ordered transfers included in the block
     std::string previousHash;                // Hash reference to the preceding block
-    std::string hash;                        // Stored hash for this block
+    std::string hash;                        // Stored SHA-256 hash for this block
 
 public:
     // Constructor: Initializes index, timestamp, transactions, and previous hash
     Block(std::size_t index, const std::vector<Transaction>& transactions, const std::string& previousHash);
 
-    // Adds transactions while assembling a block
+    // Adds a valid transaction while assembling a block
     void addTransaction(const Transaction& transaction);
 
     // Hashes the canonical representation of the block's contents (excludes its own stored hash)
@@ -28,7 +28,7 @@ public:
     // Read-Only Accessors for chain validation
     std::string getHash() const;
     std::string getPreviousHash() const;
-    std::vector<Transaction> getTransactions() const;
+    const std::vector<Transaction>& getTransactions() const;
     std::size_t getIndex() const;
     std::int64_t getTimestamp() const;
 
@@ -36,4 +36,4 @@ public:
     std::string toString() const;
 };
 
-#endif 
+#endif

@@ -1,16 +1,16 @@
-#include "../include/Block.h"
+#include "Block.h"
+#include "HashUtil.h"
 
 #include <ctime>
-#include <iomanip>
 #include <sstream>
-#include <functional>
+#include <stdexcept>
 
 // Constructor: Initializes index, timestamp, transactions, previousHash, and calculates the initial hash
 Block::Block(std::size_t index, const std::vector<Transaction>& transactions, const std::string& previousHash)
     : index(index),
       timestamp(static_cast<std::int64_t>(std::time(nullptr))),
       transactions(transactions),
-      previousHash(previousHash) 
+      previousHash(previousHash)
 {
     hash = calculateHash();
 }
@@ -26,30 +26,26 @@ void Block::addTransaction(const Transaction& transaction) {
 // Hashes the canonical representation of the block's contents (excludes its own stored hash)
 std::string Block::calculateHash() const {
     std::stringstream ss;
-    
+
     // Unambiguous serialization with fixed field order:
     // index | timestamp | previousHash | transaction_count | ordered transactions
     ss << index << "|" << timestamp << "|" << previousHash << "|" << transactions.size() << "|";
-    
+
     for (const Transaction& tx : transactions) {
         ss << tx.toString() << "|";
     }
 
     const std::string rawData = ss.str();
 
-    // -------------------------------------------------------------------------
-    // OPTION A: Once HashUtil is ready, uncomment this line and remove Option B:
-    // return HashUtil::sha256(rawData);
-    // -------------------------------------------------------------------------
+    HashUtil hasher;
+    std::string digest;
+    std::string errorMessage;
 
-    // OPTION B: Temporary deterministic hex hash fallback (so it compiles without HashUtil)
-    std::size_t h1 = std::hash<std::string>{}(rawData);
-    std::size_t h2 = std::hash<std::string>{}(rawData + "salt_block_256");
-    std::stringstream hexStream;
-    hexStream << std::hex << std::setfill('0') 
-              << std::setw(16) << h1 
-              << std::setw(16) << h2;
-    return hexStream.str();
+    if (!hasher.sha256(rawData, digest, errorMessage)) {
+        throw std::runtime_error("Block SHA-256 calculation failed: " + errorMessage);
+    }
+
+    return digest;
 }
 
 // Read-Only Accessors
@@ -61,7 +57,7 @@ std::string Block::getPreviousHash() const {
     return previousHash;
 }
 
-std::vector<Transaction> Block::getTransactions() const {
+const std::vector<Transaction>& Block::getTransactions() const {
     return transactions;
 }
 
